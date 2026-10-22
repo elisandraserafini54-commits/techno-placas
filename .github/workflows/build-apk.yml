@@ -1,1 +1,72 @@
 
+name: Gerar APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - principal
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extrair projeto
+        run: |
+          mkdir projeto
+          unzip -o Techno_Placas_Projeto_Android.zip -d projeto
+
+      - name: Localizar aplicativo
+        id: app
+        run: |
+          APP_DIR=$(find projeto -name capacitor.config.json -printf '%h\n' | head -n 1)
+          if [ -z "$APP_DIR" ]; then
+            echo "Configuração do Capacitor não encontrada."
+            exit 1
+          fi
+          echo "dir=$APP_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Instalar dependências
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm install
+
+      - name: Criar projeto Android
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npx cap add android
+
+      - name: Sincronizar aplicativo
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npx cap sync android
+
+      - name: Compilar APK
+        working-directory: ${{ steps.app.outputs.dir }}/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: techno-placas-apk
+          path: ${{ steps.app.outputs.dir }}/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
